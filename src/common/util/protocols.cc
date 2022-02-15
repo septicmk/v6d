@@ -108,6 +108,8 @@ CommandType ParseCommandType(const std::string& str_type) {
     return CommandType::ClearRequest;
   } else if (str_type == "debug_command") {
     return CommandType::DebugCommand;
+  } else if (str_type == "get_buffers_by_external_request") {
+    return CommandType::GetBuffersByExternalRequest;
   } else {
     return CommandType::NullCommand;
   }
@@ -252,17 +254,23 @@ Status ReadListDataRequest(const json& root, std::string& pattern, bool& regex,
   return Status::OK();
 }
 
-void WriteCreateBufferRequest(const size_t size, std::string& msg) {
+void WriteCreateBufferRequest(const size_t size, const ExternalID external_id,
+                              const size_t external_size, std::string& msg) {
   json root;
   root["type"] = "create_buffer_request";
   root["size"] = size;
+  root["external_size"] = external_size;
+  root["external_id"] = external_id;
 
   encode_msg(root, msg);
 }
 
-Status ReadCreateBufferRequest(const json& root, size_t& size) {
+Status ReadCreateBufferRequest(const json& root, size_t& size,
+                               ExternalID& external_id, size_t& external_size) {
   RETURN_ON_ASSERT(root["type"] == "create_buffer_request");
   size = root["size"].get<size_t>();
+  external_id = root["external_id"].get<ExternalID>();
+  external_size = root["external_size"].get<size_t>();
   return Status::OK();
 }
 
@@ -318,6 +326,29 @@ Status ReadGetBuffersRequest(const json& root, std::vector<ObjectID>& ids) {
   size_t num = root["num"].get<size_t>();
   for (size_t i = 0; i < num; ++i) {
     ids.push_back(root[std::to_string(i)].get<ObjectID>());
+  }
+  return Status::OK();
+}
+
+void WriteGetBuffersByExternalRequest(const std::set<ExternalID>& eids,
+                                      std::string& msg) {
+  json root;
+  root["type"] = "get_buffers_by_external_request";
+  int idx = 0;
+  for (auto const& eid : eids) {
+    root[std::to_string(idx++)] = eid;
+  }
+  root["num"] = eids.size();
+
+  encode_msg(root, msg);
+}
+
+Status ReadGetBuffersByExternalRequest(const json& root,
+                                       std::vector<ExternalID>& eids) {
+  RETURN_ON_ASSERT(root["type"] == "get_buffers_by_external_request");
+  size_t num = root["num"].get<size_t>();
+  for (size_t i = 0; i < num; ++i) {
+    eids.push_back(root[std::to_string(i)].get<ExternalID>());
   }
   return Status::OK();
 }

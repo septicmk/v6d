@@ -146,12 +146,19 @@ Status Client::GetMetaData(const std::vector<ObjectID>& ids,
 }
 
 Status Client::CreateBlob(size_t size, std::unique_ptr<BlobWriter>& blob) {
+  return CreateBlobExternal(size, std::string(), 0, blob);
+}
+
+Status Client::CreateBlobExternal(size_t size, ExternalID external_id,
+                                  size_t external_size,
+                                  std::unique_ptr<BlobWriter>& blob) {
   ENSURE_CONNECTED(this);
 
   ObjectID object_id = InvalidObjectID();
   Payload object;
   std::shared_ptr<arrow::MutableBuffer> buffer = nullptr;
-  RETURN_ON_ERROR(CreateBuffer(size, object_id, object, buffer));
+  RETURN_ON_ERROR(CreateBuffer(size, external_id, external_size, object_id,
+                               object, buffer));
   blob.reset(new BlobWriter(object_id, object, buffer));
   return Status::OK();
 }
@@ -376,11 +383,13 @@ Status Client::ReleaseArena(const int fd, std::vector<size_t> const& offsets,
   return Status::OK();
 }
 
-Status Client::CreateBuffer(const size_t size, ObjectID& id, Payload& payload,
+Status Client::CreateBuffer(const size_t size, const ExternalID external_id,
+                            const size_t external_size, ObjectID& id,
+                            Payload& payload,
                             std::shared_ptr<arrow::MutableBuffer>& buffer) {
   ENSURE_CONNECTED(this);
   std::string message_out;
-  WriteCreateBufferRequest(size, message_out);
+  WriteCreateBufferRequest(size, external_id, external_size, message_out);
   RETURN_ON_ERROR(doWrite(message_out));
   json message_in;
   RETURN_ON_ERROR(doRead(message_in));
@@ -406,6 +415,35 @@ Status Client::GetBuffer(const ObjectID id,
                                    ObjectIDToString(id));
   }
   buffer = buffers.at(id);
+  return Status::OK();
+}
+
+Status Client::GetBlobsByExternal(
+    const std::set<ExternalID>& eids, std::map<ExternalID, Payload>& payloads,
+    std::map<ExternalID, std::shared_ptr<arrow::Buffer>>& buffers) {
+  if (eids.empty()) {
+    return Status::OK();
+  }
+  ENSURE_CONNECTED(this);
+  std::string message_out;
+  WriteGetBuffersByExternalRequest(eids, message_out);
+  RETURN_ON_ERROR(doWrite(message_out));
+  json message_in;
+  RETURN_ON_ERROR(doRead(message_in));
+  std::vector<Payload> _payloads;
+  RETURN_ON_ERROR(ReadGetBuffersReply(message_in, _payloads));
+  for (auto const& item : _payloads) {
+    std::shared_ptr<arrow::Buffer> buffer = nullptr;
+    uint8_t *shared = nullptr, *dist = nullptr;
+    if (item.data_size > 0) {
+      VINEYARD_CHECK_OK(
+          shm_->Mmap(item.store_fd, item.map_size, true, true, &shared));
+      dist = shared + item.data_offset;
+    }
+    buffer = std::make_shared<arrow::Buffer>(dist, item.data_size);
+    buffers.emplace(item.external_id, buffer);
+    payloads.emplace(item.external_id, item);
+  }
   return Status::OK();
 }
 

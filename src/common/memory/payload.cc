@@ -28,6 +28,8 @@ void Payload::ToJSON(json& tree) const {
   tree["store_fd"] = store_fd;
   tree["data_offset"] = data_offset;
   tree["data_size"] = data_size;
+  tree["external_id"] = external_id;
+  tree["external_size"] = external_size;
   tree["map_size"] = map_size;
 }
 
@@ -36,6 +38,8 @@ void Payload::FromJSON(const json& tree) {
   store_fd = tree["store_fd"].get<int>();
   data_offset = tree["data_offset"].get<ptrdiff_t>();
   data_size = tree["data_size"].get<int64_t>();
+  external_id = tree["external_id"].get<ExternalID>();
+  external_size = tree["external_size"].get<int64_t>();
   map_size = tree["map_size"].get<int64_t>();
   pointer = nullptr;
 }

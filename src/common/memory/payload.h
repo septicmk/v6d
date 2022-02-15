@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <memory>
 
+#include "common/util/base64.h"
 #include "common/util/json.h"
 #include "common/util/uuid.h"
 
@@ -25,39 +26,83 @@ namespace vineyard {
 
 struct Payload {
   ObjectID object_id;
+  ExternalID external_id;
   int store_fd;
   int arena_fd;
   ptrdiff_t data_offset;
   int64_t data_size;
+  int64_t external_size;
   int64_t map_size;
   uint8_t* pointer;
 
   Payload()
       : object_id(EmptyBlobID()),
+        external_id(),
         store_fd(-1),
         arena_fd(-1),
         data_offset(0),
         data_size(0),
+        external_size(0),
         map_size(0),
         pointer(nullptr) {}
 
   Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int64_t msize,
           ptrdiff_t offset)
       : object_id(object_id),
+        external_id(),
         store_fd(fd),
         arena_fd(-1),
         data_offset(offset),
         data_size(size),
+        external_size(0),
+        map_size(msize),
+        pointer(ptr) {}
+
+  Payload(ObjectID object_id, ExternalID eid, int64_t size, uint8_t* ptr,
+          int fd, int64_t msize, ptrdiff_t offset)
+      : object_id(object_id),
+        external_id(eid),
+        store_fd(fd),
+        arena_fd(-1),
+        data_offset(offset),
+        data_size(size),
+        external_size(0),
         map_size(msize),
         pointer(ptr) {}
 
   Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int arena_fd,
           int64_t msize, ptrdiff_t offset)
       : object_id(object_id),
+        external_id(),
         store_fd(fd),
         arena_fd(arena_fd),
         data_offset(offset),
         data_size(size),
+        external_size(0),
+        map_size(msize),
+        pointer(ptr) {}
+
+  Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int64_t msize,
+          ptrdiff_t offset, int64_t esize)
+      : object_id(object_id),
+        external_id(),
+        store_fd(fd),
+        arena_fd(-1),
+        data_offset(offset),
+        data_size(size),
+        external_size(esize),
+        map_size(msize),
+        pointer(ptr) {}
+
+  Payload(ObjectID object_id, ExternalID eid, int64_t size, uint8_t* ptr,
+          int fd, int64_t msize, ptrdiff_t offset, int64_t esize)
+      : object_id(object_id),
+        external_id(eid),
+        store_fd(fd),
+        arena_fd(-1),
+        data_offset(offset),
+        data_size(size),
+        external_size(esize),
         map_size(msize),
         pointer(ptr) {}
 

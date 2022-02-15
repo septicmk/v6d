@@ -182,6 +182,22 @@ class Client : public ClientBase {
   Status CreateBlob(size_t size, std::unique_ptr<BlobWriter>& blob);
 
   /**
+   * @brief Create a blob in vineyard server. When creating a blob, vineyard
+   * server's bulk allocator will prepare a block of memory of the requested
+   * size, the map the memory to client's process to share the allocated memory.
+   *
+   * @param size The size of requested blob.
+   * @param external_id The id of external data.
+   * @param external_size The size of external data.
+   * @param blob The result mutable blob will be set in `blob`.
+   *
+   * @return Status that indicates whether the create action has succeeded.
+   */
+  Status CreateBlobExternal(size_t size, ExternalID external_id,
+                            size_t external_size,
+                            std::unique_ptr<BlobWriter>& blob);
+
+  /**
    * @brief Get a blob from vineyard server. When obtaining blobs from vineyard
    * server, the memory address in the server process will be mmapped to the
    * client's process to share the memory.
@@ -376,8 +392,17 @@ class Client : public ClientBase {
   Status ReleaseArena(const int fd, std::vector<size_t> const& offsets,
                       std::vector<size_t> const& sizes);
 
+  /**
+   * Users should never touch this.
+   */
+  Status GetBlobsByExternal(
+      const std::set<ExternalID>& eids, std::map<ExternalID, Payload>& payloads,
+      std::map<ExternalID, std::shared_ptr<arrow::Buffer>>& buffers);
+
  protected:
-  Status CreateBuffer(const size_t size, ObjectID& id, Payload& payload,
+  Status CreateBuffer(const size_t size, const ExternalID external_id,
+                      const size_t external_size, ObjectID& id,
+                      Payload& payload,
                       std::shared_ptr<arrow::MutableBuffer>& buffer);
 
   Status GetBuffer(const ObjectID id, std::shared_ptr<arrow::Buffer>& buffer);

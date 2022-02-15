@@ -60,6 +60,8 @@ class SocketConnection : public std::enable_shared_from_this<SocketConnection> {
 
   bool doGetBuffers(const json& root);
 
+  bool doGetBuffersByExternal(const json& root);
+
   /**
    * @brief doGetRemoteBuffers differs from doGetRemoteBuffers, that the
    * content of blob is in the response body, rather than via memory sharing.

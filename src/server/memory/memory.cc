@@ -176,6 +176,12 @@ uint8_t* BulkStore::AllocateMemory(size_t size, int* fd, int64_t* map_size,
 
 Status BulkStore::Create(const size_t data_size, ObjectID& object_id,
                          std::shared_ptr<Payload>& object) {
+  return Create(data_size, {}, 0, object_id, object);
+}
+
+Status BulkStore::Create(const size_t data_size, const ExternalID external_id,
+                         const size_t external_size, ObjectID& object_id,
+                         std::shared_ptr<Payload>& object) {
   if (data_size == 0) {
     object_id = EmptyBlobID();
     object = Payload::MakeEmpty();
@@ -190,9 +196,10 @@ Status BulkStore::Create(const size_t data_size, ObjectID& object_id,
     return Status::NotEnoughMemory("size = " + std::to_string(data_size));
   }
   object_id = GenerateBlobID(pointer);
-  object = std::make_shared<Payload>(object_id, data_size, pointer, fd,
-                                     map_size, offset);
+  object = std::make_shared<Payload>(object_id, external_id, data_size, pointer,
+                                     fd, map_size, offset, external_size);
   objects_.emplace(object_id, object);
+  externals_.emplace(external_id, object);
   DVLOG(10) << "after allocate: " << ObjectIDToString(object_id) << ": "
             << Footprint() << "(" << FootprintLimit() << ")";
   return Status::OK();
@@ -228,6 +235,27 @@ Status BulkStore::Get(const std::vector<ObjectID>& ids,
   return Status::OK();
 }
 
+Status BulkStore::Get(const std::vector<ExternalID>& eids,
+                      std::vector<std::shared_ptr<Payload>>& objects) {
+  for (auto object_id : eids) {
+    external_map_t::const_accessor accessor;
+    if (externals_.find(accessor, object_id)) {
+      objects.push_back(accessor->second);
+    }
+  }
+  return Status::OK();
+}
+
+Status BulkStore::Delete(const ExternalID& external_id) {
+  external_map_t::const_accessor external_accessor;
+  if (externals_.find(external_accessor, external_id)) {
+    auto& object = external_accessor->second;
+    auto object_id = object->object_id;
+    return Delete(object_id);
+  }
+  return Status::OK();
+}
+
 Status BulkStore::Delete(const ObjectID& object_id) {
   // see also: BulkStore::PreAllocate().
   if (object_id == EmptyBlobID() ||
@@ -241,6 +269,7 @@ Status BulkStore::Delete(const ObjectID& object_id) {
                                    ObjectIDToString(object_id));
   }
   auto& object = accessor->second;
+  auto external_id = object->external_id;
   if (object->arena_fd == -1) {
     auto buff_size = object->data_size;
     BulkAllocator::Free(object->pointer, buff_size);
@@ -286,6 +315,10 @@ Status BulkStore::Delete(const ObjectID& object_id) {
                                       std::min(upper, upper_bound));
     }
   }
+  external_map_t::const_accessor external_accessor;
+  if (externals_.find(external_accessor, external_id)) {
+    externals_.erase(external_accessor);
+  }
   objects_.erase(accessor);
   return Status::OK();
 }
@@ -293,6 +326,11 @@ Status BulkStore::Delete(const ObjectID& object_id) {
 bool BulkStore::Exists(const ObjectID& object_id) {
   object_map_t::const_accessor accessor;
   return objects_.find(accessor, object_id);
+}
+
+bool BulkStore::Exists(const ExternalID& object_id) {
+  external_map_t::const_accessor accessor;
+  return externals_.find(accessor, object_id);
 }
 
 size_t BulkStore::Footprint() const { return BulkAllocator::Allocated(); }

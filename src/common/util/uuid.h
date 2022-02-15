@@ -35,6 +35,13 @@ namespace vineyard {
 using ObjectID = uint64_t;
 
 /**
+ * @brief ExternalID is an opaque type for vineyard's object. The External ID is
+ * specified outside of vineyard for compatibility, the underlying type of
+ * ObjectID is base64 string.
+ */
+using ExternalID = std::string;
+
+/**
  * @brief Signature is an opaque type for vineyard's object. The signature of
  * an object keep unchange during migration. The underlying type of Signature
  * is a 64-bit unsigned integer.

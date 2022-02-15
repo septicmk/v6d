@@ -269,6 +269,9 @@ bool SocketConnection::processMessage(const std::string& message_in) {
   case CommandType::DebugCommand: {
     return doDebug(root);
   }
+  case CommandType::GetBuffersByExternalRequest: {
+    return doGetBuffersByExternal(root);
+  }
   case CommandType::ExitRequest: {
     return true;
   }
@@ -297,6 +300,42 @@ bool SocketConnection::doGetBuffers(const json& root) {
 
   TRY_READ_REQUEST(ReadGetBuffersRequest, root, ids);
   RESPONSE_ON_ERROR(server_ptr_->GetBulkStore()->Get(ids, objects));
+  WriteGetBuffersReply(objects, message_out);
+
+  /* NOTE: Here we send the file descriptor after the objects.
+   *       We are using sendmsg to send the file descriptor
+   *       which is a sync method. In theory, this might cause
+   *       the server to block, but currently this seems to be
+   *       the only method that are widely used in practice, e.g.,
+   *       boost and Plasma, and actually the file descriptor is
+   *       a very short message.
+   *
+   *       We will examine other methods later, such as using
+   *       explicit file descritors.
+   */
+  this->doWrite(message_out, [self, objects](const Status& status) {
+    for (auto object : objects) {
+      int store_fd = object->store_fd;
+      int data_size = object->data_size;
+      if (data_size > 0 &&
+          self->used_fds_.find(store_fd) == self->used_fds_.end()) {
+        self->used_fds_.emplace(store_fd);
+        send_fd(self->nativeHandle(), store_fd);
+      }
+    }
+    return Status::OK();
+  });
+  return false;
+}
+
+bool SocketConnection::doGetBuffersByExternal(const json& root) {
+  auto self(shared_from_this());
+  std::vector<ExternalID> eids;
+  std::vector<std::shared_ptr<Payload>> objects;
+  std::string message_out;
+
+  TRY_READ_REQUEST(ReadGetBuffersByExternalRequest, root, eids);
+  RESPONSE_ON_ERROR(server_ptr_->GetBulkStore()->Get(eids, objects));
   WriteGetBuffersReply(objects, message_out);
 
   /* NOTE: Here we send the file descriptor after the objects.
@@ -374,13 +413,16 @@ bool SocketConnection::doGetRemoteBuffers(const json& root) {
 bool SocketConnection::doCreateBuffer(const json& root) {
   auto self(shared_from_this());
   size_t size;
+  ExternalID external_id;
+  size_t external_size;
   std::shared_ptr<Payload> object;
   std::string message_out;
 
-  TRY_READ_REQUEST(ReadCreateBufferRequest, root, size);
+  TRY_READ_REQUEST(ReadCreateBufferRequest, root, size, external_id,
+                   external_size);
   ObjectID object_id;
-  RESPONSE_ON_ERROR(
-      server_ptr_->GetBulkStore()->Create(size, object_id, object));
+  RESPONSE_ON_ERROR(server_ptr_->GetBulkStore()->Create(
+      size, external_id, external_size, object_id, object));
   WriteCreateBufferReply(object_id, object, message_out);
 
   int store_fd = object->store_fd;
@@ -402,12 +444,15 @@ bool SocketConnection::doCreateBuffer(const json& root) {
 bool SocketConnection::doCreateRemoteBuffer(const json& root) {
   auto self(shared_from_this());
   size_t size;
+  ExternalID external_id;
+  size_t external_size;
   std::shared_ptr<Payload> object;
 
-  TRY_READ_REQUEST(ReadCreateBufferRequest, root, size);
+  TRY_READ_REQUEST(ReadCreateBufferRequest, root, size, external_id,
+                   external_size);
   ObjectID object_id;
-  RESPONSE_ON_ERROR(
-      server_ptr_->GetBulkStore()->Create(size, object_id, object));
+  RESPONSE_ON_ERROR(server_ptr_->GetBulkStore()->Create(
+      size, external_id, external_size, object_id, object));
 
   asio::async_read(
       socket_, asio::buffer(object->pointer, size),

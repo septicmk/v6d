@@ -69,6 +69,7 @@ enum class CommandType {
   DeepCopyRequest = 35,
   ClearRequest = 36,
   PushNextStreamChunkRequest = 37,
+  GetBuffersByExternalRequest = 38,
 };
 
 CommandType ParseCommandType(const std::string& str_type);
@@ -176,9 +177,11 @@ void WriteInstanceStatusReply(const json& content, std::string& msg);
 
 Status ReadInstanceStatusReply(const json& root, json& content);
 
-void WriteCreateBufferRequest(const size_t size, std::string& msg);
+void WriteCreateBufferRequest(const size_t size, const ExternalID external_id,
+                              const size_t external_size, std::string& msg);
 
-Status ReadCreateBufferRequest(const json& root, size_t& size);
+Status ReadCreateBufferRequest(const json& root, size_t& size,
+                               ExternalID& external_id, size_t& external_size);
 
 void WriteCreateBufferReply(const ObjectID id,
                             const std::shared_ptr<Payload>& object,
@@ -198,6 +201,12 @@ void WriteGetBuffersReply(const std::vector<std::shared_ptr<Payload>>& objects,
                           std::string& msg);
 
 Status ReadGetBuffersReply(const json& root, std::vector<Payload>& objects);
+
+void WriteGetBuffersByExternalRequest(const std::set<ExternalID>& eids,
+                                      std::string& msg);
+
+Status ReadGetBuffersByExternalRequest(const json& root,
+                                       std::vector<ExternalID>& ids);
 
 void WriteGetRemoteBuffersRequest(const std::unordered_set<ObjectID>& ids,
                                   std::string& msg);
