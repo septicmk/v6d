@@ -272,6 +272,9 @@ bool SocketConnection::processMessage(const std::string& message_in) {
   case CommandType::GetBuffersByExternalRequest: {
     return doGetBuffersByExternal(root);
   }
+  case CommandType::ModifyReferenceCountRequest: {
+    return doModifyReferenceCount(root);
+  }
   case CommandType::ExitRequest: {
     return true;
   }
@@ -1039,6 +1042,20 @@ bool SocketConnection::doDebug(const json& root) {
   std::string message_out;
   json result;
   WriteDebugReply(result, message_out);
+  this->doWrite(message_out);
+  return false;
+}
+
+bool SocketConnection::doModifyReferenceCount(const json& root){
+  auto self(shared_from_this());
+  ExternalID eid;
+  int change;
+  std::shared_ptr<Payload> objects;
+  std::string message_out;
+
+  TRY_READ_REQUEST(ReadModifyReferenceCountRequest, root, eid, change);
+  RESPONSE_ON_ERROR(server_ptr_->GetBulkStore()->ModifyReferenceCount(eid, change));
+  WriteModifyReferenceCountReply(message_out);
   this->doWrite(message_out);
   return false;
 }

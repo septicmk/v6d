@@ -33,6 +33,7 @@ struct Payload {
   int64_t data_size;
   int64_t external_size;
   int64_t map_size;
+  int64_t reference_count;
   uint8_t* pointer;
 
   Payload()
@@ -44,6 +45,7 @@ struct Payload {
         data_size(0),
         external_size(0),
         map_size(0),
+        reference_count(0),
         pointer(nullptr) {}
 
   Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int64_t msize,
@@ -56,18 +58,7 @@ struct Payload {
         data_size(size),
         external_size(0),
         map_size(msize),
-        pointer(ptr) {}
-
-  Payload(ObjectID object_id, ExternalID eid, int64_t size, uint8_t* ptr,
-          int fd, int64_t msize, ptrdiff_t offset)
-      : object_id(object_id),
-        external_id(eid),
-        store_fd(fd),
-        arena_fd(-1),
-        data_offset(offset),
-        data_size(size),
-        external_size(0),
-        map_size(msize),
+        reference_count(0),
         pointer(ptr) {}
 
   Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int arena_fd,
@@ -80,22 +71,11 @@ struct Payload {
         data_size(size),
         external_size(0),
         map_size(msize),
-        pointer(ptr) {}
-
-  Payload(ObjectID object_id, int64_t size, uint8_t* ptr, int fd, int64_t msize,
-          ptrdiff_t offset, int64_t esize)
-      : object_id(object_id),
-        external_id(),
-        store_fd(fd),
-        arena_fd(-1),
-        data_offset(offset),
-        data_size(size),
-        external_size(esize),
-        map_size(msize),
+        reference_count(0),
         pointer(ptr) {}
 
   Payload(ObjectID object_id, ExternalID eid, int64_t size, uint8_t* ptr,
-          int fd, int64_t msize, ptrdiff_t offset, int64_t esize)
+          int fd, int64_t msize, int64_t rcnt, ptrdiff_t offset, int64_t esize)
       : object_id(object_id),
         external_id(eid),
         store_fd(fd),
@@ -104,6 +84,7 @@ struct Payload {
         data_size(size),
         external_size(esize),
         map_size(msize),
+        reference_count(rcnt),
         pointer(ptr) {}
 
   static std::shared_ptr<Payload> MakeEmpty() {

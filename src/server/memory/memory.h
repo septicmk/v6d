@@ -47,7 +47,7 @@ class BulkStore {
       tbb::concurrent_hash_map<ObjectID, std::shared_ptr<Payload>>;
 
   using external_map_t =
-      tbb::concurrent_hash_map<ExternalID, std::shared_ptr<Payload>>;
+      tbb::concurrent_hash_map<ExternalID, ObjectID>; // may store stale mapping
 
   ~BulkStore();
 
@@ -80,6 +80,10 @@ class BulkStore {
 
   bool Exists(const ExternalID& external_id);
 
+  Status ModifyReferenceCount(const ObjectID& object_id, int changes, bool& to_erase);
+
+  Status ModifyReferenceCount(const ExternalID& external_id, int changes);
+
   object_map_t const& List() const { return objects_; }
 
   size_t Footprint() const;
@@ -93,6 +97,9 @@ class BulkStore {
  private:
   uint8_t* AllocateMemory(size_t size, int* fd, int64_t* map_size,
                           ptrdiff_t* offset);
+
+  Status DeletePayload(const ObjectID& object_id, const std::shared_ptr<Payload>& object);
+
   struct Arena {
     int fd;
     size_t size;

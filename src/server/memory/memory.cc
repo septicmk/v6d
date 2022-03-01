@@ -197,9 +197,9 @@ Status BulkStore::Create(const size_t data_size, const ExternalID external_id,
   }
   object_id = GenerateBlobID(pointer);
   object = std::make_shared<Payload>(object_id, external_id, data_size, pointer,
-                                     fd, map_size, offset, external_size);
+                                     fd, map_size, /*reference_count =*/ 1, offset, external_size);
   objects_.emplace(object_id, object);
-  externals_.emplace(external_id, object);
+  externals_.emplace(external_id, object_id);
   DVLOG(10) << "after allocate: " << ObjectIDToString(object_id) << ": "
             << Footprint() << "(" << FootprintLimit() << ")";
   return Status::OK();
@@ -211,13 +211,25 @@ Status BulkStore::Get(const ObjectID id, std::shared_ptr<Payload>& object) {
     return Status::OK();
   } else {
     object_map_t::const_accessor accessor;
-    if (objects_.find(accessor, id)) {
+  if (objects_.find(accessor, id)) {
       object = accessor->second;
       return Status::OK();
     } else {
       return Status::ObjectNotExists("get: id = " + ObjectIDToString(id));
     }
   }
+}
+
+Status BulkStore::Get(const std::vector<ExternalID>& eids,
+                      std::vector<std::shared_ptr<Payload>>& objects) {
+  std::vector<ObjectID> ids;
+  for (auto eid : eids) {
+    external_map_t::const_accessor accessor;
+    if (externals_.find(accessor, eid)) {
+      ids.push_back(accessor->second);
+    }
+  }
+  return Get(ids, objects);
 }
 
 Status BulkStore::Get(const std::vector<ObjectID>& ids,
@@ -235,13 +247,35 @@ Status BulkStore::Get(const std::vector<ObjectID>& ids,
   return Status::OK();
 }
 
-Status BulkStore::Get(const std::vector<ExternalID>& eids,
-                      std::vector<std::shared_ptr<Payload>>& objects) {
-  for (auto object_id : eids) {
-    external_map_t::const_accessor accessor;
-    if (externals_.find(accessor, object_id)) {
-      objects.push_back(accessor->second);
+Status BulkStore::ModifyReferenceCount(const ExternalID& external_id, int changes) {
+  external_map_t::const_accessor external_accessor;
+  bool to_erase = false;
+  if (!externals_.find(external_accessor, external_id)) {
+    return Status::ObjectNotExists("ModifyReferenceCount: external_id = " + external_id);
+  } else {
+    auto object_id = external_accessor->second;
+    ModifyReferenceCount(object_id, changes, to_erase);
+  }
+  if (to_erase) {
+    externals_.erase(external_accessor);
+  }
+  return Status::OK();
+}
+
+Status BulkStore::ModifyReferenceCount(const ObjectID& object_id, int changes, bool& to_erase) {
+  object_map_t::accessor object_accessor;
+  if (!objects_.find(object_accessor, object_id)) {
+    return Status::ObjectNotExists("ModifyReferenceCount: id = " + ObjectIDToString(object_id));
+  } else {
+    auto& object = object_accessor->second;
+    object->reference_count += changes;
+    if (object->reference_count <= 0) {
+      to_erase = true;
+      DeletePayload(object_id, object);
     }
+  }
+  if (to_erase) {
+    objects_.erase(object_accessor);
   }
   return Status::OK();
 }
@@ -249,8 +283,7 @@ Status BulkStore::Get(const std::vector<ExternalID>& eids,
 Status BulkStore::Delete(const ExternalID& external_id) {
   external_map_t::const_accessor external_accessor;
   if (externals_.find(external_accessor, external_id)) {
-    auto& object = external_accessor->second;
-    auto object_id = object->object_id;
+    auto object_id = external_accessor->second;
     return Delete(object_id);
   }
   return Status::OK();
@@ -269,7 +302,12 @@ Status BulkStore::Delete(const ObjectID& object_id) {
                                    ObjectIDToString(object_id));
   }
   auto& object = accessor->second;
-  auto external_id = object->external_id;
+  DeletePayload(object_id, object);
+  objects_.erase(accessor);
+  return Status::OK();
+}
+
+Status BulkStore::DeletePayload(const ObjectID& object_id, const std::shared_ptr<Payload>& object) {
   if (object->arena_fd == -1) {
     auto buff_size = object->data_size;
     BulkAllocator::Free(object->pointer, buff_size);
@@ -315,12 +353,6 @@ Status BulkStore::Delete(const ObjectID& object_id) {
                                       std::min(upper, upper_bound));
     }
   }
-  external_map_t::const_accessor external_accessor;
-  if (externals_.find(external_accessor, external_id)) {
-    externals_.erase(external_accessor);
-  }
-  objects_.erase(accessor);
-  return Status::OK();
 }
 
 bool BulkStore::Exists(const ObjectID& object_id) {

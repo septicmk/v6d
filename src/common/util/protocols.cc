@@ -110,6 +110,10 @@ CommandType ParseCommandType(const std::string& str_type) {
     return CommandType::DebugCommand;
   } else if (str_type == "get_buffers_by_external_request") {
     return CommandType::GetBuffersByExternalRequest;
+  } else if (str_type == "modify_reference_count_request") {
+    return CommandType::ModifyReferenceCountRequest;
+  } else if (str_type == "modify_reference_count_reply") {
+    return CommandType::ModifyReferenceCountReply;
   } else {
     return CommandType::NullCommand;
   }
@@ -1139,6 +1143,32 @@ void WriteDebugReply(const json& result, std::string& msg) {
 Status ReadDebugReply(const json& root, json& result) {
   CHECK_IPC_ERROR(root, "debug_reply");
   result = root["result"];
+  return Status::OK();
+}
+
+void WriteModifyReferenceCountRequest(ExternalID eid, int changes, std::string& msg){
+  json root;
+  root["type"] = "modify_reference_count_request";
+  root["external_id"] = eid;
+  root["changes"] = changes;
+  encode_msg(root, msg);
+}
+
+Status ReadModifyReferenceCountRequest(const json& root, ExternalID& eid, int& changes) {
+  RETURN_ON_ASSERT(root["type"] == "modify_reference_count_request");
+  eid = root["external_id"].get<ExternalID>();
+  changes = root["changes"].get<int>();
+  return Status::OK();
+}
+
+void WriteModifyReferenceCountReply(std::string& msg) {
+  json root;
+  root["type"] = "modify_reference_count_reply";
+  encode_msg(root, msg);
+}
+
+Status ReadModifyReferenceCountReply(const json& root) {
+  CHECK_IPC_ERROR(root, "modify_reference_count_reply");
   return Status::OK();
 }
 

@@ -70,6 +70,8 @@ enum class CommandType {
   ClearRequest = 36,
   PushNextStreamChunkRequest = 37,
   GetBuffersByExternalRequest = 38,
+  ModifyReferenceCountRequest = 39,
+  ModifyReferenceCountReply = 40,
 };
 
 CommandType ParseCommandType(const std::string& str_type);
@@ -381,6 +383,13 @@ void WriteDebugReply(const json& result, std::string& msg);
 
 Status ReadDebugReply(const json& root, json& result);
 
+void WriteModifyReferenceCountRequest(ExternalID eid, int changes, std::string& msg);
+
+Status ReadModifyReferenceCountRequest(const json& result, ExternalID& eid, int& changes);
+
+void WriteModifyReferenceCountReply(std::string& msg);
+
+Status ReadModifyReferenceCountReply(const json& result);
 }  // namespace vineyard
 
 #endif  // SRC_COMMON_UTIL_PROTOCOLS_H_

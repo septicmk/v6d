@@ -197,6 +197,8 @@ class Client : public ClientBase {
                             size_t external_size,
                             std::unique_ptr<BlobWriter>& blob);
 
+  Status ModifyReferenceCount(ExternalID external_id, int changes);
+
   /**
    * @brief Get a blob from vineyard server. When obtaining blobs from vineyard
    * server, the memory address in the server process will be mmapped to the
@@ -398,6 +400,8 @@ class Client : public ClientBase {
   Status GetBlobsByExternal(
       const std::set<ExternalID>& eids, std::map<ExternalID, Payload>& payloads,
       std::map<ExternalID, std::shared_ptr<arrow::Buffer>>& buffers);
+
+  Status Release(const ExternalID& external_id);
 
  protected:
   Status CreateBuffer(const size_t size, const ExternalID external_id,

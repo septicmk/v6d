@@ -447,6 +447,11 @@ Status Client::GetBlobsByExternal(
   return Status::OK();
 }
 
+Status Client::Release(const ExternalID& external_id) {
+  // TODO(mengke): ModifyReferenceCount(external_id, -1);
+  return Status::OK(); 
+}
+
 Status Client::GetBuffers(
     const std::set<ObjectID>& ids,
     std::map<ObjectID, std::shared_ptr<arrow::Buffer>>& buffers) {
@@ -472,6 +477,17 @@ Status Client::GetBuffers(
     buffer = std::make_shared<arrow::Buffer>(dist, item.data_size);
     buffers.emplace(item.object_id, buffer);
   }
+  return Status::OK();
+}
+
+Status Client::ModifyReferenceCount(ExternalID external_id, int changes) {
+  ENSURE_CONNECTED(this);
+  std::string message_out;
+  WriteModifyReferenceCountRequest(external_id, changes, message_out);
+  RETURN_ON_ERROR(doWrite(message_out));
+  json message_in;
+  RETURN_ON_ERROR(doRead(message_in));
+  RETURN_ON_ERROR(ReadModifyReferenceCountReply(message_in));
   return Status::OK();
 }
 
